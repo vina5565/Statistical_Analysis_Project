@@ -160,47 +160,35 @@ class FinalParser:
         """학년별 원격수업일수 추출 (강화된 패턴)"""
         remote_days = {}
         
-        # 다양한 오타와 띄어쓰기 패턴 모두 지원
         patterns = [
-            # 정상 패턴
             r'원격\s*수업\s*일수?\s*(\d+)\s*일',
             r'원격\s*일수?\s*(\d+)\s*일',
-            
-            # 오타 패턴
-            r'인격\s*수업\s*일수?\s*(\d+)\s*일',  # 원격 → 인격
-            r'원격\s*수입\s*일수?\s*(\d+)\s*일',  # 수업 → 수입
-            r'인격\s*수입\s*일수?\s*(\d+)\s*일',  # 원격수업 → 인격수입
-            
-            # 띄어쓰기 없음
+            r'인격\s*수업\s*일수?\s*(\d+)\s*일',
+            r'원격\s*수입\s*일수?\s*(\d+)\s*일',
+            r'인격\s*수입\s*일수?\s*(\d+)\s*일',
             r'원격수업일수(\d+)일',
             r'인격수업일수(\d+)일',
             r'원격수입일수(\d+)일',
-            
-            # 숫자만 붙어있는 경우
             r'원격\s*수업\s*일수?\s*(\d+)',
             r'원격\s*일수?\s*(\d+)',
             r'인격\s*수업\s*일수?\s*(\d+)',
             r'원격\s*수입\s*일수?\s*(\d+)',
-            
-            # 개근 뒤에 오는 경우
             r'개근\s*,?\s*원격\s*수업?\s*일수?\s*(\d+)\s*일',
             r'개근\s*\.?\s*원격\s*수업?\s*일수?\s*(\d+)\s*일',
             r'개근\s*원격\s*수업?\s*일수?\s*(\d+)\s*일',
         ]
         
-        # 모든 원격일수 값 추출
         all_remote_values = []
         for pattern in patterns:
             matches = re.findall(pattern, text, re.IGNORECASE)
             for match in matches:
                 try:
                     value = int(match)
-                    if 0 <= value <= 200:  # 합리적 범위
+                    if 0 <= value <= 200:
                         all_remote_values.append(value)
                 except:
                     pass
         
-        # 학년별 섹션 분리 시도
         sections = re.split(r'\[(\d)학년\]', text)
         
         for i in range(len(sections)):
@@ -212,7 +200,6 @@ class FinalParser:
             if i > 0 and re.match(r'^\d$', sections[i-1]):
                 grade = int(sections[i-1])
                 
-                # 해당 섹션에서 원격일수 찾기
                 section_values = []
                 for pattern in patterns:
                     matches = re.findall(pattern, section, re.IGNORECASE)
@@ -225,19 +212,14 @@ class FinalParser:
                             pass
                 
                 if section_values:
-                    # 해당 학년의 원격일수 = 최대값
                     remote_days[grade] = max(section_values)
         
-        # 학년 구분 실패 시 전체 값으로 추정
         if not remote_days and all_remote_values:
-            # 0이 아닌 값들만 필터링
             non_zero_values = [v for v in all_remote_values if v > 0]
             
             if non_zero_values:
-                # 높은 순으로 정렬
                 sorted_values = sorted(set(non_zero_values), reverse=True)[:3]
                 
-                # 3학년부터 할당
                 for idx, grade in enumerate([3, 2, 1]):
                     if idx < len(sorted_values):
                         remote_days[grade] = sorted_values[idx]
@@ -246,13 +228,12 @@ class FinalParser:
     
     def extract_grade_years_from_awards(self, text: str) -> Dict[int, int]:
         """수상경력 추출 - 사용 안 함 (빈도 분석만 사용)"""
-        return {}  # 항상 빈 딕셔너리 반환
+        return {}
     
     def parse_student_info(self, text: str, filename: str) -> Dict:
         """학생 기본 정보 추출 (빈도 분석만 사용!)"""
         info = {}
         
-        # 파일명 파싱
         patterns = [
             r'(\d{9})_(\d)학?년?_(.+?)_(.+?)_(수시|정시)',
             r'(\d{9})_(\d)_(.+?)_(.+?)_(수시|정시)',
@@ -274,32 +255,21 @@ class FinalParser:
         info['admission_type'] = match.group(5) if len(match.groups()) >= 5 else '불명'
         info['university_admission_year'] = int(info['student_id'][:4])
         
-        # 빈도 분석으로 졸업년도 추정 (유일한 방법!)
         estimated_grad, method = self.estimate_graduation_year_from_frequency(text)
         
         if estimated_grad:
             hs_admission = estimated_grad - 3
-            full_grade_years = {
-                1: hs_admission,
-                2: hs_admission + 1,
-                3: hs_admission + 2
-            }
+            full_grade_years = {1: hs_admission, 2: hs_admission + 1, 3: hs_admission + 2}
             info['hs_graduation_year'] = estimated_grad
             info['estimation_method'] = method
         else:
-            # 실패 - 대학 입학년도 기준
             hs_admission = info['university_admission_year'] - 3
-            full_grade_years = {
-                1: hs_admission,
-                2: hs_admission + 1,
-                3: hs_admission + 2
-            }
+            full_grade_years = {1: hs_admission, 2: hs_admission + 1, 3: hs_admission + 2}
             info['hs_graduation_year'] = info['university_admission_year']
             info['estimation_method'] = '실패(현역가정)'
         
         info['grade_years'] = full_grade_years
         
-        # 재수 여부
         gap = info['university_admission_year'] - info['hs_graduation_year']
         if gap > 0:
             info['is_repeat'] = 1
@@ -308,17 +278,14 @@ class FinalParser:
             info['is_repeat'] = 0
             info['repeat_years'] = 0
         
-        # 원격수업일수 추출
         remote_days = self.extract_remote_days(text)
         info['remote_days'] = remote_days
         
-        # 학년별 코로나 여부 (핵심!)
         info['grade1_covid'] = 1 if remote_days.get(1, 0) > 0 else 0
         info['grade2_covid'] = 1 if remote_days.get(2, 0) > 0 else 0
         info['grade3_covid'] = 1 if remote_days.get(3, 0) > 0 else 0
         info['any_covid'] = 1 if any(remote_days.values()) else 0
         
-        # 전체 코호트 (참고용)
         info['cohort'] = 'COVID' if info['hs_graduation_year'] >= 2021 else 'Pre-COVID'
         
         return info
@@ -483,7 +450,7 @@ class FinalParser:
                             })
                         
                         grades.append(grade_data_2nd)
-                except Exception as e:
+                except Exception:
                     continue
         
         return grades
@@ -558,7 +525,6 @@ class FinalParser:
         df = pd.DataFrame(grades)
         metrics = {'student_id': student_id}
         
-        # 전체 변동성
         df_achievement = df[df['grade_type'] == 'achievement']
         if len(df_achievement) > 1:
             valid = df_achievement[df_achievement['grade_numeric'] > 0]['grade_numeric']
@@ -578,7 +544,6 @@ class FinalParser:
             metrics['overall_volatility'] = valid_all.std()
             metrics['overall_mean'] = valid_all.mean()
         
-        # 학년별 변동성 (코로나 분석용)
         for grade in [1, 2, 3]:
             grade_data = df[df['grade_year'] == grade]
             if len(grade_data) > 1:
@@ -590,38 +555,32 @@ class FinalParser:
         
         return metrics
 
-
 def create_detailed_excel(df_students, df_grades, df_seteuk, output_path='data/results/학생별_상세정보.xlsx'):
     """상세 엑셀 생성"""
-    print("\n📊 상세 엑셀 보고서 생성 중...")
+    print("\n상세 엑셀 보고서 생성 중...")
     
-    # 기존 파일 삭제
     if os.path.exists(output_path):
         try:
             os.remove(output_path)
             print(f"  기존 엑셀 파일 삭제: {output_path}")
-        except Exception as e:
-            print(f"  ⚠️ 엑셀 파일이 열려있습니다!")
-            print(f"  → {output_path} 파일을 닫고 다시 실행하세요!")
+        except Exception:
+            print("  엑셀 파일이 열려있습니다.")
+            print(f"  {output_path} 파일을 닫고 다시 실행하세요.")
             return False
     
     try:
         with pd.ExcelWriter(output_path, engine='openpyxl') as writer:
-        
-            # 1. 학생기본정보
             basic_cols = ['student_id', 'name', 'major', 'admission_type', 
-                        'university_admission_year', 'hs_graduation_year', 
-                        'is_repeat', 'repeat_years', 'any_covid', 'cohort', 'estimation_method']
+                          'university_admission_year', 'hs_graduation_year', 
+                          'is_repeat', 'repeat_years', 'any_covid', 'cohort', 'estimation_method']
             
             df_basic = df_students[basic_cols].copy()
             df_basic.columns = ['학번', '이름', '전공', '입학전형', '대학입학년도', '고교졸업년도',
-                            '재수여부', '재수년수', '코로나경험', '코호트', '추정방법']
+                                '재수여부', '재수년수', '코로나경험', '코호트', '추정방법']
             df_basic['재수여부'] = df_basic['재수여부'].map({0: '현역', 1: '재수생'})
             df_basic['코로나경험'] = df_basic['코로나경험'].map({0: '없음', 1: '있음'})
-            
             df_basic.to_excel(writer, sheet_name='학생기본정보', index=False)
             
-            # 2. 학년별코로나
             covid_data = []
             for _, row in df_students.iterrows():
                 for grade in [1, 2, 3]:
@@ -638,35 +597,30 @@ def create_detailed_excel(df_students, df_grades, df_seteuk, output_path='data/r
             df_covid['코로나여부'] = df_covid['코로나여부'].map({0: '없음', 1: '있음'})
             df_covid.to_excel(writer, sheet_name='학년별코로나', index=False)
             
-            # 3. 전체성적
             grade_cols = ['student_id', 'grade_year', 'year', 'term', 'subject', 'subject_group',
-                        'achievement', 'grade_type', 'raw_score', 'subject_avg']
+                          'achievement', 'grade_type', 'raw_score', 'subject_avg']
             
             df_grade_out = df_grades[grade_cols].copy()
             df_grade_out.columns = ['학번', '학년', '연도', '학기', '과목', '교과군',
-                                '등급', '평가방식', '원점수', '과목평균']
+                                    '등급', '평가방식', '원점수', '과목평균']
             df_grade_out['평가방식'] = df_grade_out['평가방식'].map({'achievement': '절대평가', 'rank': '상대평가'})
             df_grade_out.to_excel(writer, sheet_name='전체성적', index=False)
             
-            # 4. 학기별이수과목수
             course_count = df_grades.groupby(['student_id', 'grade_year', 'term']).size().reset_index(name='이수과목수')
             course_count = course_count.merge(df_students[['student_id', 'name']], on='student_id')
             course_count = course_count[['student_id', 'name', 'grade_year', 'term', '이수과목수']]
             course_count.columns = ['학번', '이름', '학년', '학기', '이수과목수']
             course_count.to_excel(writer, sheet_name='학기별이수과목수', index=False)
             
-            # 5. 세특개수
             seteuk_count = df_seteuk.groupby('student_id').size().reset_index(name='세특섹션개수')
             seteuk_count = seteuk_count.merge(df_students[['student_id', 'name']], on='student_id')
             seteuk_count = seteuk_count[['student_id', 'name', '세특섹션개수']]
             seteuk_count.columns = ['학번', '이름', '세특섹션개수']
             seteuk_count.to_excel(writer, sheet_name='세특개수', index=False)
             
-            # 6. 학생별등급분포
             grade_dist_data = []
             for student_id in df_students['student_id'].unique():
                 student_grades = df_grades[df_grades['student_id'] == student_id]
-                
                 if len(student_grades) == 0:
                     continue
                 
@@ -699,11 +653,11 @@ def create_detailed_excel(df_students, df_grades, df_seteuk, output_path='data/r
             
             pd.DataFrame(grade_dist_data).to_excel(writer, sheet_name='학생별등급분포', index=False)
         
-            print(f"  ✓ 엑셀 저장 성공: {output_path}")
-            return True
+        print(f"  엑셀 저장 성공: {output_path}")
+        return True
         
     except Exception as e:
-        print(f"  ❌ 엑셀 저장 실패: {e}")
+        print(f"  엑셀 저장 실패: {e}")
         return False
 
 
@@ -724,7 +678,7 @@ def main():
     print(f"\n총 {len(txt_files)}개 파일 발견")
     
     if len(txt_files) == 0:
-        print("⚠️  data/raw/ 디렉토리에 txt 파일이 없습니다!")
+        print("data/raw/ 디렉토리에 txt 파일이 없습니다.")
         return
     
     parser = FinalParser()
@@ -747,7 +701,7 @@ def main():
             student_info = parser.parse_student_info(text, filename)
             if not student_info:
                 parsing_errors.append(f"{filename}: 실패")
-                print("❌")
+                print("실패")
                 continue
             
             student_id = student_info['student_id']
@@ -765,20 +719,19 @@ def main():
             volatility = parser.calculate_volatility(grades, student_id, remote_days)
             all_volatility.append(volatility)
             
-            print("✓")
+            print("완료")
             
         except Exception as e:
             parsing_errors.append(f"{filepath.name}: {str(e)}")
-            print(f"❌")
+            print("오류")
     
-    print("\n💾 데이터 저장 중...")
+    print("\n데이터 저장 중...")
     
     df_students = pd.DataFrame(all_student_info)
     df_grades = pd.DataFrame(all_grades)
     df_seteuk = pd.DataFrame(all_seteuk)
     df_volatility = pd.DataFrame(all_volatility)
     
-    # CSV 저장 (기존 파일 먼저 삭제)
     csv_files = {
         'student_info.csv': df_students,
         'grades.csv': df_grades,
@@ -789,80 +742,75 @@ def main():
     for filename, dataframe in csv_files.items():
         filepath = output_dir / filename
         
-        # 기존 파일 삭제 시도
         if filepath.exists():
             try:
                 os.remove(filepath)
                 print(f"  기존 파일 삭제: {filename}")
             except Exception as e:
-                print(f"  ⚠️ {filename} 삭제 실패: {e}")
-                print(f"  → 파일을 닫고 다시 실행하세요!")
+                print(f"  {filename} 삭제 실패: {e}")
+                print("  파일을 닫고 다시 실행하세요.")
                 return
         
-        # 저장
         try:
             dataframe.to_csv(filepath, index=False, encoding='utf-8-sig')
-            print(f"  ✓ 저장: {filename}")
+            print(f"  저장: {filename}")
         except Exception as e:
-            print(f"  ❌ {filename} 저장 실패: {e}")
+            print(f"  {filename} 저장 실패: {e}")
             return
     
-    # 엑셀 생성
     create_detailed_excel(df_students, df_grades, df_seteuk)
     
-    # 결과 출력
     print("\n" + "="*80)
-    print("✅ 파싱 완료!")
+    print("파싱 완료")
     print("="*80)
     
-    print(f"\n📊 학생 정보: {len(df_students)}명")
+    print(f"\n학생 정보: {len(df_students)}명")
     if 'is_repeat' in df_students.columns:
         print(f"   - 현역: {(df_students['is_repeat'] == 0).sum()}명")
         print(f"   - 재수생: {(df_students['is_repeat'] == 1).sum()}명")
     
-    print(f"\n📊 성적 데이터: {len(df_grades)}건")
+    print(f"\n성적 데이터: {len(df_grades)}건")
     if 'grade_type' in df_grades.columns:
         ach = (df_grades['grade_type'] == 'achievement').sum()
         rank = (df_grades['grade_type'] == 'rank').sum()
         print(f"   - 절대평가: {ach}건")
         print(f"   - 상대평가: {rank}건")
     
-    print(f"\n📊 세특 데이터: {len(df_seteuk)}건")
-    print(f"📊 변동성 데이터: {len(df_volatility)}건")
+    print(f"\n세특 데이터: {len(df_seteuk)}건")
+    print(f"변동성 데이터: {len(df_volatility)}건")
     
     if 'estimation_method' in df_students.columns:
-        print(f"\n📊 졸업년도 추정 방법:")
+        print("\n졸업년도 추정 방법:")
         for method, count in df_students['estimation_method'].value_counts().items():
             print(f"   - {method}: {count}명")
     
     if 'any_covid' in df_students.columns:
-        print(f"\n📊 코로나 경험:")
+        print("\n코로나 경험:")
         print(f"   - 있음: {(df_students['any_covid'] == 1).sum()}명")
         print(f"   - 없음: {(df_students['any_covid'] == 0).sum()}명")
     
-    # 학년별 코로나 통계
-    print(f"\n📊 학년별 코로나 경험:")
+    print("\n학년별 코로나 경험:")
     for grade in [1, 2, 3]:
         col = f'grade{grade}_covid'
         if col in df_students.columns:
             print(f"   - {grade}학년: {(df_students[col] == 1).sum()}명")
     
     if 'hs_graduation_year' in df_students.columns:
-        print(f"\n📊 고교 졸업년도 분포:")
+        print("\n고교 졸업년도 분포:")
         for year, count in df_students['hs_graduation_year'].value_counts().sort_index().items():
             print(f"   {year}년: {count}명")
     
     if parsing_errors:
-        print(f"\n⚠️  {len(parsing_errors)}개 오류")
+        print(f"\n오류 {len(parsing_errors)}개")
         Path('logs').mkdir(exist_ok=True)
         with open('logs/parsing_errors.log', 'w', encoding='utf-8') as f:
             f.write('\n'.join(parsing_errors))
     
-    print("\n💾 저장 위치:")
-    print(f"  - CSV: data/processed/")
-    print(f"  - 엑셀: data/results/학생별_상세정보.xlsx")
+    print("\n저장 위치:")
+    print("  - CSV: data/processed/")
+    print("  - 엑셀: data/results/학생별_상세정보.xlsx")
     
-    print("\n✨ Step 1 완료!")
+    print("\nStep 1 완료")
 
 if __name__ == "__main__":
     main()
