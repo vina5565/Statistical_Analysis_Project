@@ -1,0 +1,3 @@
+﻿hypothesis,pre_covid_n,covid_n,pre_covid_mean,covid_mean,difference,difference_pct,t_statistic,p_value,cohens_d,significant,hypothesis_supported,n,total_effect,direct_effect,mediation_effect,mediation_ratio,sobel_p_exploration,sobel_p_online,mediation_significant
+H1-1,6.0,21.0,1.2366641534568357,0.9203429566833827,-0.31632119677345294,-25.57858541377166,-1.6104886984048652,0.11984685267761472,-0.7455114037198793,False,False,,,,,,,,
+H1-2,,,,,,,,,,,,24.0,-0.33473519549644304,-0.07106416097518731,-0.29094331084408365,86.91745438139183,0.09432078004650313,0.4947389903149424,False
