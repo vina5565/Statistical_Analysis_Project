@@ -192,33 +192,53 @@ def covid_comparison(df_students, df_grades, df_volatility):
 
 
 def grade_distribution(df_grades):
-    """등급 분포"""
+    """등급 분포 (유효한 등급만 집계, 그 외 무시)"""
 
     print("\n" + "=" * 80)
     print("3. 등급 분포")
     print("=" * 80)
 
-    if 'grade_type' not in df_grades.columns:
+    if 'grade_type' not in df_grades.columns or 'achievement' not in df_grades.columns:
         print("등급 정보 없음")
         return
 
-    # 절대평가
-    ach_grades = df_grades[df_grades['grade_type'] == 'achievement']
-    if len(ach_grades) > 0:
-        print("\n[절대평가 (A~E)]")
-        dist = ach_grades['achievement'].value_counts().sort_index()
-        for grade, count in dist.items():
-            pct = count / len(ach_grades) * 100
-            print(f"  {grade}: {count}건 ({pct:.1f}%)")
+    # 공통 전처리: 공백 제거 + 결측 제거
+    tmp = df_grades.copy()
+    tmp['achievement'] = tmp['achievement'].astype(str).str.strip()
+    tmp = tmp[tmp['achievement'].notna() & (tmp['achievement'] != '') & (tmp['achievement'].str.lower() != 'nan')]
 
-    # 상대평가
-    rank_grades = df_grades[df_grades['grade_type'] == 'rank']
-    if len(rank_grades) > 0:
-        print("\n[상대평가 (1~9)]")
-        dist = rank_grades['achievement'].value_counts().sort_index()
-        for grade, count in dist.items():
-            pct = count / len(rank_grades) * 100
-            print(f"  {grade}: {count}건 ({pct:.1f}%)")
+    # 1) 절대평가: A~E만 인정
+    ach_valid_set = set(list("ABCDE"))
+    ach = tmp[tmp['grade_type'] == 'achievement'].copy()
+    ach = ach[ach['achievement'].isin(ach_valid_set)]
+
+    if len(ach) > 0:
+        print("\n[절대평가 (A~E) - 유효값만]")
+        dist = ach['achievement'].value_counts().reindex(list("ABCDE")).dropna()
+        denom = dist.sum()  # 유효한 값만 기준으로 퍼센트
+        for g, c in dist.items():
+            pct = c / denom * 100
+            print(f"  {g}: {c}건 ({pct:.1f}%)")
+
+    # 2) 상대평가: 1~9만 인정 (정수/문자 모두 처리)
+    rank = tmp[tmp['grade_type'] == 'rank'].copy()
+
+    # 숫자 형태만 남기고 int로 변환 시도 -> 실패는 NaN으로
+    rank['rank_num'] = pd.to_numeric(rank['achievement'], errors='coerce')
+
+    # 1~9 정수만 인정 (1.0 같은 것도 허용하되 정수 조건 체크)
+    rank = rank[rank['rank_num'].between(1, 9)]
+    rank = rank[rank['rank_num'] % 1 == 0]  # 정수만
+    rank['rank_num'] = rank['rank_num'].astype(int)
+
+    if len(rank) > 0:
+        print("\n[상대평가 (1~9) - 유효값만]")
+        dist = rank['rank_num'].value_counts().reindex(range(1, 10)).dropna()
+        denom = dist.sum()  # 유효한 값만 기준으로 퍼센트
+        for g, c in dist.items():
+            pct = c / denom * 100
+            print(f"  {g}: {c}건 ({pct:.1f}%)")
+
 
 
 def create_visualizations(df_students, df_grades, df_volatility):
